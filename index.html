@@ -1503,15 +1503,71 @@
   // ---------- Record events via Formspree (page visit, open click, final answer) ----------
   const FORMSPREE_URL = 'https://formspree.io/f/mykovlww';
   const sentEvents = new Set();
+
+  // Persistent per-device ID — survives reloads on the same device/browser
+  function getDeviceId() {
+    try {
+      let id = localStorage.getItem('iram_device_id');
+      if (!id) {
+        id = (window.crypto && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : 'd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem('iram_device_id', id);
+      }
+      return id;
+    } catch (e) {
+      return 'no-storage';
+    }
+  }
+
+  // Friendly device label parsed from userAgent
+  function getDeviceName() {
+    const ua = navigator.userAgent || '';
+    let kind = 'Device';
+    let browser = 'Browser';
+
+    if (/iPhone/i.test(ua)) kind = 'iPhone';
+    else if (/iPad/i.test(ua)) kind = 'iPad';
+    else if (/Android/i.test(ua)) {
+      kind = /Mobile/i.test(ua) ? 'Android Phone' : 'Android Tablet';
+      const m = ua.match(/Android[^;]*;\s*([^)]+)\)/);
+      if (m) {
+        const model = m[1].split('Build')[0].split(';').pop().trim();
+        if (model && model.length > 1 && model.length < 50) kind = model;
+      }
+    }
+    else if (/Macintosh|Mac OS X/i.test(ua)) kind = 'Mac';
+    else if (/Windows/i.test(ua)) kind = 'Windows PC';
+    else if (/CrOS/i.test(ua)) kind = 'Chromebook';
+    else if (/Linux/i.test(ua)) kind = 'Linux';
+
+    // Browser — check Edge/Opera before Chrome, Chrome before Safari
+    if (/Edg\//i.test(ua)) browser = 'Edge';
+    else if (/OPR\/|Opera/i.test(ua)) browser = 'Opera';
+    else if (/SamsungBrowser/i.test(ua)) browser = 'Samsung Internet';
+    else if (/Firefox\//i.test(ua)) browser = 'Firefox';
+    else if (/Chrome\//i.test(ua)) browser = 'Chrome';
+    else if (/Safari\//i.test(ua)) browser = 'Safari';
+
+    return `${kind} (${browser})`;
+  }
+
+  const DEVICE_ID = getDeviceId();
+  const DEVICE_NAME = getDeviceName();
+
   function recordEvent(eventName) {
     if (sentEvents.has(eventName)) return;
     sentEvents.add(eventName);
     const data = new FormData();
     data.append('event', eventName);
+    data.append('device_id', DEVICE_ID);
+    data.append('device_name', DEVICE_NAME);
     data.append('timestamp', new Date().toISOString());
     data.append('userAgent', navigator.userAgent);
     data.append('referrer', document.referrer || 'direct');
     data.append('screen', `${window.innerWidth}x${window.innerHeight}`);
+    data.append('language', navigator.language || 'unknown');
+    data.append('timezone', Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown');
     try {
       fetch(FORMSPREE_URL, {
         method: 'POST',
