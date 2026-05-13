@@ -1555,6 +1555,21 @@
   const DEVICE_ID = getDeviceId();
   const DEVICE_NAME = getDeviceName();
 
+  // Source = ?from=... param if present (more reliable than referrer on mobile apps),
+  // else falls back to document.referrer, else "direct"
+  function getSource() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const from = params.get('from') || params.get('utm_source');
+      if (from) return from;
+    } catch (e) {}
+    if (document.referrer) {
+      try { return new URL(document.referrer).hostname; } catch (e) { return document.referrer; }
+    }
+    return 'direct';
+  }
+  const SOURCE = getSource();
+
   function recordEvent(eventName) {
     if (sentEvents.has(eventName)) return;
     sentEvents.add(eventName);
@@ -1564,7 +1579,9 @@
     data.append('device_name', DEVICE_NAME);
     data.append('timestamp', new Date().toISOString());
     data.append('userAgent', navigator.userAgent);
+    data.append('source', SOURCE);
     data.append('referrer', document.referrer || 'direct');
+    data.append('landing_url', window.location.href);
     data.append('screen', `${window.innerWidth}x${window.innerHeight}`);
     data.append('language', navigator.language || 'unknown');
     data.append('timezone', Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown');
