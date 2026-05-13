@@ -1282,6 +1282,7 @@
   const veil = document.getElementById('veil');
 
   openBtn.addEventListener('click', () => {
+    recordEvent('opened_letter');
     veil.classList.add('show');
     startMusic();
     setTimeout(() => {
@@ -1499,26 +1500,33 @@
     ? `https://wa.me/${waPhone}?text=${waText}`
     : `https://wa.me/?text=${waText}`;
 
-  // ---------- Record her answer via Formspree ----------
+  // ---------- Record events via Formspree (page visit, open click, final answer) ----------
   const FORMSPREE_URL = 'https://formspree.io/f/mykovlww';
-  let answerSent = false;
-  function recordAnswer(choice) {
-    if (answerSent) return;
-    answerSent = true;
+  const sentEvents = new Set();
+  function recordEvent(eventName) {
+    if (sentEvents.has(eventName)) return;
+    sentEvents.add(eventName);
     const data = new FormData();
-    data.append('answer', choice);
+    data.append('event', eventName);
     data.append('timestamp', new Date().toISOString());
     data.append('userAgent', navigator.userAgent);
+    data.append('referrer', document.referrer || 'direct');
+    data.append('screen', `${window.innerWidth}x${window.innerHeight}`);
     try {
       fetch(FORMSPREE_URL, {
         method: 'POST',
         body: data,
         headers: { 'Accept': 'application/json' }
-      }).catch(() => { answerSent = false; });
+      }).catch(() => { sentEvents.delete(eventName); });
     } catch (e) {
-      answerSent = false;
+      sentEvents.delete(eventName);
     }
   }
+  // Backwards-compat alias for the existing Maybe / Need time handlers
+  function recordAnswer(choice) { recordEvent('answered: ' + choice); }
+
+  // Fire as soon as the page loads — she opened the link
+  recordEvent('page_visited');
 
   function gentleVibrate(pattern) {
     if (navigator.vibrate) {
